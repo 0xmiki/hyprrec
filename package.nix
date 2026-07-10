@@ -2,6 +2,8 @@
   lib,
   rustPlatform,
   makeWrapper,
+  pkg-config,
+  libinput,
   wf-recorder,
   slurp,
   hyprland,
@@ -24,7 +26,8 @@ rustPlatform.buildRustPackage {
   src = source;
   cargoLock.lockFile = ./Cargo.lock;
 
-  nativeBuildInputs = [ makeWrapper ];
+  nativeBuildInputs = [ makeWrapper pkg-config ];
+  buildInputs = [ libinput ];
 
   postInstall = ''
     wrapProgram $out/bin/hyprrec \

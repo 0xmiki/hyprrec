@@ -14,6 +14,7 @@ pkgs.mkShell {
 
     # Useful development tools
     pkg-config
+    libinput
   ];
 
   env = {

@@ -39,6 +39,40 @@ hyprrec --dir ~/Recordings --name walkthrough
 
 By default, recordings are stored in `$XDG_VIDEOS_DIR/hyprrec`, normally `~/Videos/hyprrec`, with names such as `hyprrec-20260710-110547.mp4`. `--name` accepts a basename, adds `.mp4` automatically, and refuses path separators or overwriting an existing file.
 
+### Action telemetry
+
+Telemetry is disabled unless `--telemetry` is supplied. Categories can be comma-separated or supplied by repeating the flag:
+
+```console
+hyprrec --quality ultra \
+  --telemetry click,scroll,keyboard-input,workspace-changed,window-focused
+```
+
+This creates a sidecar with the same basename as the video:
+
+```text
+product-demo.mp4
+product-demo.telemetry.jsonl
+```
+
+Available categories:
+
+| Category | Events |
+| --- | --- |
+| `click` | Pressed pointer button, button name/code and Hyprland cursor position |
+| `scroll` | Throttled horizontal/vertical scroll deltas from mouse wheels or touchpad fingers |
+| `keyboard-input` | Named control keys and shortcuts; printable typing is recorded only as `text` activity |
+| `workspace-changed` | Hyprland workspace ID/name changes |
+| `window-focused` | Focused Hyprland window class and title |
+
+Each JSONL event includes a schema version, sequence number, milliseconds relative to telemetry start, wall-clock milliseconds, source, event type and structured data:
+
+```json
+{"schema_version":1,"sequence":12,"t_ms":2410,"unix_ms":1783680012410,"source":"libinput","type":"pointer.click","data":{"button":"left","button_code":272,"cursor":{"x":1106,"y":102}}}
+```
+
+Input telemetry uses `libinput` and requires the recording user to belong to the system `input` group. Keyboard telemetry never stores ordinary printable characters, form contents or reconstructed text. Shortcuts retain their key name so an editor can distinguish actions such as Ctrl+C from normal typing. Window titles can contain private document or page names, so enable `window-focused` only when appropriate for the recording.
+
 ### Quality profiles
 
 | Profile | Video encoding | Best use | Tradeoff |
@@ -63,8 +97,9 @@ The conversion is designed to be visually indistinguishable in normal viewing, b
 1. The CLI verifies that it is running in a Hyprland Wayland session and that its runtime commands are available.
 2. For full-screen capture, `hyprctl -j monitors` identifies the focused active output.
 3. With `--region`, `slurp` returns the selected geometry; cancelling selection exits cleanly.
-4. The selected quality profile is translated into explicit `wf-recorder` codec, pixel-format, frame-rate, and codec parameters.
-5. The recorder runs in the foreground. Both processes receive Ctrl+C, allowing `wf-recorder` to finalize the container while `hyprrec` waits for it.
+4. Requested telemetry collectors write an independent, timestamped JSONL sidecar.
+5. The selected quality profile is translated into explicit `wf-recorder` codec, pixel-format, frame-rate, and codec parameters.
+6. The recorder runs in the foreground. Both processes receive Ctrl+C, allowing `wf-recorder` to finalize the container while `hyprrec` waits for it.
 
 Audio is disabled by default. `--audio` records the current default PipeWire source; selecting a specific audio device is not currently supported.
 
@@ -120,4 +155,4 @@ cargo run --release -- --help
 cargo run --release -- --region --quality ultra
 ```
 
-The test suite covers CLI parsing, safe output naming, focused-monitor discovery, collision handling, and the exact recorder arguments for every quality profile.
+The test suite covers CLI parsing, safe output naming, focused-monitor discovery, collision handling, privacy-safe key classification, telemetry sidecar naming, and the exact recorder arguments for every quality profile.

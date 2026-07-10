@@ -11,6 +11,10 @@ use clap::{Parser, ValueEnum};
 use directories::UserDirs;
 use serde::Deserialize;
 
+mod telemetry;
+
+use telemetry::{TelemetryKind, TelemetrySession};
+
 const DEFAULT_DIRECTORY_NAME: &str = "hyprrec";
 const VIDEO_EXTENSION: &str = ".mp4";
 
@@ -41,6 +45,16 @@ struct Cli {
     /// Encoding profile: high is compatible, ultra maximizes detail, compact uses efficient HEVC
     #[arg(long, value_enum, default_value = "high")]
     quality: Quality,
+
+    /// Write selected action telemetry beside the recording as JSONL
+    #[arg(
+        long,
+        value_enum,
+        value_delimiter = ',',
+        value_name = "CATEGORY",
+        help = "Track action telemetry (repeat or comma-separate): click, scroll, keyboard-input, workspace-changed, window-focused"
+    )]
+    telemetry: Vec<TelemetryKind>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
@@ -125,6 +139,9 @@ fn run(cli: Cli) -> Result<(), AppError> {
 
     let destination = build_output_path(&directory, cli.name.as_deref(), Local::now())?;
     ensure_destination_available(&destination)?;
+    if !cli.telemetry.is_empty() {
+        ensure_destination_available(&telemetry_path(&destination))?;
+    }
 
     let target = if cli.region {
         CaptureTarget::Geometry(select_region()?)
@@ -134,6 +151,14 @@ fn run(cli: Cli) -> Result<(), AppError> {
 
     let args = recorder_args(&destination, &target, cli.audio, cli.quality);
     println!("Recording to {}", destination.display());
+    let telemetry = if cli.telemetry.is_empty() {
+        None
+    } else {
+        let session = TelemetrySession::start(&destination, &cli.telemetry)
+            .map_err(|error| AppError::Message(format!("could not start telemetry: {error}")))?;
+        println!("Telemetry will be saved to {}", session.path().display());
+        Some(session)
+    };
     println!("Press Ctrl+C to stop and finalize the recording.");
 
     // Both processes receive terminal Ctrl+C. Keeping the parent alive lets it
@@ -145,7 +170,13 @@ fn run(cli: Cli) -> Result<(), AppError> {
     let status = Command::new("wf-recorder")
         .args(&args)
         .status()
-        .map_err(|error| AppError::Message(format!("could not start wf-recorder: {error}")))?;
+        .map_err(|error| AppError::Message(format!("could not start wf-recorder: {error}")));
+
+    if let Some(session) = &telemetry {
+        session.stop(status.as_ref().is_ok_and(|status| status.success()));
+    }
+
+    let status = status?;
 
     if !status.success() {
         return Err(AppError::Message(format!(
@@ -233,6 +264,10 @@ fn ensure_destination_available(destination: &Path) -> Result<(), AppError> {
     } else {
         Ok(())
     }
+}
+
+fn telemetry_path(destination: &Path) -> PathBuf {
+    destination.with_extension("telemetry.jsonl")
 }
 
 fn validate_name(name: &str) -> Result<String, AppError> {
@@ -523,6 +558,8 @@ mod tests {
             "demo",
             "--quality",
             "ultra",
+            "--telemetry",
+            "click,scroll,workspace-changed",
         ])
         .unwrap();
 
@@ -531,6 +568,14 @@ mod tests {
         assert_eq!(cli.dir, Some(PathBuf::from("/tmp/recordings")));
         assert_eq!(cli.name.as_deref(), Some("demo"));
         assert_eq!(cli.quality, Quality::Ultra);
+        assert_eq!(
+            cli.telemetry,
+            [
+                TelemetryKind::Click,
+                TelemetryKind::Scroll,
+                TelemetryKind::WorkspaceChanged,
+            ]
+        );
     }
 
     #[test]
@@ -543,5 +588,13 @@ mod tests {
     fn cli_accepts_compact_quality() {
         let cli = Cli::try_parse_from(["hyprrec", "--quality", "compact"]).unwrap();
         assert_eq!(cli.quality, Quality::Compact);
+    }
+
+    #[test]
+    fn telemetry_sidecar_uses_recording_basename() {
+        assert_eq!(
+            telemetry_path(Path::new("/videos/demo.mp4")),
+            Path::new("/videos/demo.telemetry.jsonl")
+        );
     }
 }

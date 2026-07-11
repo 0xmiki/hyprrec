@@ -4,6 +4,7 @@
   makeWrapper,
   pkg-config,
   libinput,
+  ffmpeg,
   wf-recorder,
   slurp,
   hyprland,
@@ -32,6 +33,9 @@ rustPlatform.buildRustPackage {
   postInstall = ''
     wrapProgram $out/bin/hyprrec \
       --prefix PATH : ${lib.makeBinPath [ wf-recorder slurp hyprland ]}
+    wrapProgram $out/bin/hyprrec-mcp \
+      --prefix PATH : ${lib.makeBinPath [ ffmpeg wf-recorder slurp hyprland ]} \
+      --set HYPRREC_BIN $out/bin/hyprrec
   '';
 
   meta = {

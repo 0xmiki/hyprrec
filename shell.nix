@@ -11,6 +11,7 @@ pkgs.mkShell {
     # Initial recording backend
     wf-recorder
     slurp
+    ffmpeg
 
     # Useful development tools
     pkg-config

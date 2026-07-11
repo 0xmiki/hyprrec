@@ -39,6 +39,37 @@ hyprrec --dir ~/Recordings --name walkthrough
 
 By default, recordings are stored in `$XDG_VIDEOS_DIR/hyprrec`, normally `~/Videos/hyprrec`, with names such as `hyprrec-20260710-110547.mp4`. `--name` accepts a basename, adds `.mp4` automatically, and refuses path separators or overwriting an existing file.
 
+### Codex MCP server
+
+The package also installs `hyprrec-mcp`, a stdio MCP server that lets Codex manage recordings without constructing shell commands. It exposes:
+
+| Tool | Purpose |
+| --- | --- |
+| `recording_start` | Start a focused-monitor or interactive-region recording and immediately return its session ID and artifact paths |
+| `recording_stop` | Stop a session gracefully and wait for the MP4 to finalize |
+| `recording_status` | Report the current session and process state |
+| `recording_list` | List recordings and telemetry sidecars in the default or supplied directory |
+| `recording_inspect` | Return FFprobe stream, format, size, and sidecar information |
+
+`recording_start` accepts `dir`, `name`, `quality`, `audio`, `target`, and `telemetry`. For example, Codex can request an ultra-quality focused-monitor recording in a project-specific folder with all action telemetry enabled.
+
+After installing the Nix package, register the server globally with Codex:
+
+```console
+codex mcp add hyprrec -- /run/current-system/sw/bin/hyprrec-mcp
+codex mcp list
+```
+
+Then ensure the server inherits the active Hyprland variables in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.hyprrec]
+command = "/run/current-system/sw/bin/hyprrec-mcp"
+env_vars = ["HYPRLAND_INSTANCE_SIGNATURE", "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR"]
+```
+
+Start a new Codex session after adding or changing the server. For a development build, replace the installed path with `target/release/hyprrec-mcp`. These inherited variables let the recorder reach the active compositor and remain correct when the Hyprland instance signature changes.
+
 ### Action telemetry
 
 Telemetry is disabled unless `--telemetry` is supplied. Categories can be comma-separated or supplied by repeating the flag:
